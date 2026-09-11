@@ -20,6 +20,11 @@ if [ ! -e /env/flake.nix ]; then
   cp /bootstrap/flake.nix /env/flake.nix
 fi
 
+# /env is intentionally agent-managed. The entrypoint runs as root so the
+# initial seed would otherwise become root-owned and read-only to pn. Also
+# repair volumes created by older images that already contain such a seed.
+chown pn:pn /env/flake.nix
+
 if [ "$#" -eq 0 ]; then
   set -- sh
 fi
