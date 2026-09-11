@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-
-export HOME=/state
-export npm_config_cache=/state/.npm
-mkdir -p "$HOME" "$npm_config_cache"
-
-exec dev npx --yes @wonderwhy-er/desktop-commander@0.2.50 remote "$@"
