@@ -8,6 +8,30 @@ export PATH="$NIX_DIR:$PATH"
 
 cd /workspace
 
+enter_recovery() {
+  export FLAKE_DOCKER_RECOVERY=1
+  export FLAKE_DOCKER_RECOVERY_REASON=env-unavailable
+  export PS1='[flake-docker recovery] \w \$ '
+
+  cat >&2 <<'EOF'
+flake-docker: failed to enter /env with nix develop.
+flake-docker: RECOVERY MODE is active (FLAKE_DOCKER_RECOVERY=1).
+flake-docker: inspect or repair /env/flake.nix, then run `dev` or reconnect.
+EOF
+
+  if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+    exec /bin/sh -lc "$SSH_ORIGINAL_COMMAND"
+  fi
+
+  exec /bin/sh
+}
+
+# Probe only environment construction. A failing user command must not be
+# mistaken for a broken /env and re-run outside the Nix development shell.
+if ! nix develop /env --command true; then
+  enter_recovery
+fi
+
 if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
   exec nix develop /env --command sh -lc "$SSH_ORIGINAL_COMMAND"
 fi
