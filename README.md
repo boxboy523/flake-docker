@@ -13,7 +13,6 @@ Traditional Docker containers bundle all dependencies into the image itself — 
 - The environment is declared in `/env/flake.nix`
 - `/env` can be persistent, so humans or agents can evolve their own toolchain without rebuilding the image
 - `/workspace` is kept separate from the environment definition
-- `/state` can persist agent/runtime state without mixing it into the toolchain or project
 
 ```text
 Host NixOS
@@ -23,8 +22,7 @@ Host NixOS
     └── Container
         ├── /bootstrap/flake.nix  ← immutable seed
         ├── /env/flake.nix        ← persistent, user/agent managed
-        ├── /workspace            ← persistent project state
-        └── /state                ← persistent agent/runtime state
+        └── /workspace            ← persistent project state
 ```
 
 ## Requirements
@@ -81,28 +79,6 @@ dev cargo test
 
 The environment definition is persistent and declarative rather than hidden in a mutable container image.
 
-## Remote Desktop Commander
-
-The image includes a launcher for Remote Desktop Commander. Add a persistent state volume so pairing and npm state survive container recreation:
-
-```bash
-docker run -it --rm \
-  -v /nix:/nix:ro \
-  -v flake-env:/env \
-  -v flake-workspace:/workspace \
-  -v flake-agent-state:/state \
-  -e NIX_DIR=$NIX_DIR \
-  flake-docker
-```
-
-Then start the remote agent inside the container:
-
-```bash
-remote-desktop
-```
-
-The launcher runs `@wonderwhy-er/desktop-commander@0.2.50` with the Node/npm toolchain from `/env`, while keeping its HOME and npm cache under `/state`.
-
 ## Agent guide
 
 `SKILL.md` documents the sandbox layout and expected agent workflow. A copy is also installed in the image at:
@@ -110,6 +86,14 @@ The launcher runs `@wonderwhy-er/desktop-commander@0.2.50` with the Node/npm too
 ```text
 /etc/flake-docker/SKILL.md
 ```
+
+## Host-side control plane
+
+Remote control, pairing, and authentication should live outside this container. A host-side controller can expose a narrow IPC bridge into the sandbox when remote agent access is needed.
+
+Keep the controller itself restricted and avoid giving it direct Docker socket access. Prefer a dedicated Unix socket or similarly constrained bridge that only targets this sandbox.
+
+Editor integration can follow the same pattern: expose a small read-mostly RPC surface instead of arbitrary host-side evaluation.
 
 ## Non-interactive commands
 
@@ -148,14 +132,15 @@ The repository `flake.nix` is only the seed used when `/env/flake.nix` does not 
 
 The image can be used as a persistent development sandbox for an AI agent:
 
-- keep host policy, Docker configuration, and the image outside the agent's control
-- give the agent write access to `/env`, `/workspace`, and optionally `/state`
+- keep host policy, Docker configuration, remote control, and the image outside the agent's control
+- give the agent write access to `/env` and `/workspace`
 - let it evolve its toolchain by editing the flake
 - keep the host's Nix user untrusted
 - avoid exposing the Docker socket inside the sandbox
 - add container-level capability, memory, CPU, and network restrictions as appropriate
+- expose host functionality only through narrow, documented IPC bridges
 
-The security boundary belongs in the container launch policy, not in `flake.nix`.
+The security boundary belongs in the container launch policy and bridge policy, not in `flake.nix`.
 
 ## How it works
 
@@ -174,7 +159,7 @@ export NIX_DIR=$(dirname $(readlink -f $(which nix)))
 - **Declarative state** — toolchain changes remain inspectable and reproducible
 - **Tiny image** — packages come from the host Nix store
 - **No duplication** — shares the host store
-- **Separated state** — toolchain, workspace, agent state, and container rootfs have distinct lifecycles
+- **Separated state** — toolchain, workspace, and container rootfs have distinct lifecycles
 
 ## Limitations
 
