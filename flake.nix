@@ -1,14 +1,24 @@
-# flake.nix
 {
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  outputs = { nixpkgs, ... }: {
-    devShells.x86_64-linux.default = nixpkgs.legacyPackages.x86_64-linux.mkShell {
-      packages = with nixpkgs.legacyPackages.x86_64-linux; [
-        python3
-        nodejs
-        git
-        openssh
-      ];
+
+  outputs = { self, nixpkgs, ... }:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+    in {
+      packages.${system} = {
+        image = import ./image.nix {
+          inherit pkgs;
+          src = self;
+        };
+        default = self.packages.${system}.image;
+      };
+
+      devShells.${system}.default = pkgs.mkShell {
+        packages = with pkgs; [
+          nix-prefetch-docker
+          skopeo
+        ];
+      };
     };
-  };
 }
