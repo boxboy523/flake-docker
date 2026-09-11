@@ -7,6 +7,7 @@
         python3
         nodejs
         git
+        openssh
       ];
     };
   };
