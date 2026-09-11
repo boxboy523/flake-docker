@@ -11,7 +11,7 @@ Use this container as a persistent, declarative development sandbox.
 
 ## Toolchain workflow
 
-SSH and ordinary sessions enter the environment defined by `/env/flake.nix`. If you change the flake, use `dev` to enter the updated environment or run a command in it:
+SSH and ordinary sessions normally enter the environment defined by `/env/flake.nix`. If you change the flake, use `dev` to enter the updated environment or run a command in it:
 
 ```sh
 dev
@@ -20,6 +20,30 @@ dev cargo test
 ```
 
 Prefer adding required development tools to `/env/flake.nix` instead of installing mutable system packages. Keep the environment reproducible with `flake.lock`.
+
+## Recovery mode
+
+If `nix develop /env` cannot construct the environment, SSH falls back to the fixed Alpine control-plane shell instead of locking you out.
+
+Recovery mode is explicit:
+
+```sh
+echo "$FLAKE_DOCKER_RECOVERY"
+# 1
+
+echo "$FLAKE_DOCKER_RECOVERY_REASON"
+# env-unavailable
+```
+
+The prompt is also prefixed with `[flake-docker recovery]` for interactive sessions.
+
+When recovery mode is active, inspect and repair `/env/flake.nix` or `/env/flake.lock`, then test the repaired environment with:
+
+```sh
+dev
+```
+
+or reconnect over SSH. Recovery mode is still inside the same Docker sandbox and runs as `pn`; it does not grant host or Docker privileges.
 
 ## Project workflow
 
