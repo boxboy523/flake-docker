@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+export HOME=/home/pn
+cd /workspace
+
+if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+  exec nix develop /env --command sh -lc "$SSH_ORIGINAL_COMMAND"
+fi
+
+exec nix develop /env --command sh
