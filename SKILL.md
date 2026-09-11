@@ -6,7 +6,6 @@ Use this container as a persistent, declarative development sandbox.
 
 - `/env`: persistent toolchain definition. Edit `/env/flake.nix` and `/env/flake.lock` as needed.
 - `/workspace`: persistent project files and repositories.
-- `/state`: persistent agent/runtime state such as Remote Desktop Commander pairing and npm cache.
 - container rootfs: disposable. Do not rely on changes outside the persistent paths.
 
 ## Toolchain workflow
@@ -27,18 +26,14 @@ Work under `/workspace`. Clone or create repositories there unless another writa
 
 Do not expect host files, credentials, Docker sockets, or other host resources to be available unless they were explicitly exposed by the container launch policy.
 
-## Remote Desktop Commander
+## Host integration
 
-Start the remote agent with:
+Remote control and pairing belong outside this container. A host-side controller may expose a narrow IPC bridge into the sandbox when needed.
 
-```sh
-remote-desktop
-```
-
-Its persistent runtime state is stored under `/state`. The launcher uses the Node/npm toolchain from the current `/env` and pins Desktop Commander to a known version.
+Use only documented bridge commands or sockets. Do not assume arbitrary host execution, Docker control, or unrestricted editor access is permitted.
 
 ## Security boundary
 
-You may modify `/env`, `/workspace`, and `/state`. Treat the image, host configuration, mounts, capabilities, and container launch policy as outside your control.
+You may modify `/env` and `/workspace`. Treat the image, host configuration, mounts, capabilities, IPC bridges, and container launch policy as outside your control.
 
 If host editor integration is available, use only its documented bridge or socket API. Do not assume arbitrary host execution is permitted.
