@@ -21,6 +21,10 @@ let
       isNixos = false;
       withLdns = false;
     }).overrideAttrs (old: {
+      # The staging derivation is not a normal reusable OpenSSH package. It is
+      # only an FHS root fragment consumed by image.nix, so split dev/man
+      # outputs would be meaningless and must not be required by Nix.
+      outputs = [ "out" ];
       dontAddPrefix = true;
 
       configureFlags =
