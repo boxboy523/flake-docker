@@ -24,4 +24,8 @@ if [ "$#" -eq 0 ]; then
   set -- sh
 fi
 
-exec nix develop /env --command "$@"
+if [ "$1" = "start-sshd" ]; then
+  exec /usr/local/bin/start-sshd
+fi
+
+exec su-exec pn nix develop /env --command "$@"
