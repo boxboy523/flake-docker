@@ -13,6 +13,7 @@ Traditional Docker containers bundle all dependencies into the image itself — 
 - The environment is declared in `/env/flake.nix`
 - `/env` can be persistent, so humans or agents can evolve their own toolchain without rebuilding the image
 - `/workspace` is kept separate from the environment definition
+- `/state` can persist agent/runtime state without mixing it into the toolchain or project
 
 ```text
 Host NixOS
@@ -22,7 +23,8 @@ Host NixOS
     └── Container
         ├── /bootstrap/flake.nix  ← immutable seed
         ├── /env/flake.nix        ← persistent, user/agent managed
-        └── /workspace            ← persistent project state
+        ├── /workspace            ← persistent project state
+        └── /state                ← persistent agent/runtime state
 ```
 
 ## Requirements
@@ -64,13 +66,50 @@ docker run -it --rm \
 
 On the first run, `/bootstrap/flake.nix` seeds `/env/flake.nix`. After that, `/env` is left untouched.
 
-This means the container can add or remove packages by editing `/env/flake.nix`, then re-entering the environment with:
+This means the container can add or remove packages by editing `/env/flake.nix`, then enter the updated environment with:
 
 ```bash
-nix develop /env
+dev
+```
+
+Or run one command in the updated environment:
+
+```bash
+dev rg --version
+dev cargo test
 ```
 
 The environment definition is persistent and declarative rather than hidden in a mutable container image.
+
+## Remote Desktop Commander
+
+The image includes a launcher for Remote Desktop Commander. Add a persistent state volume so pairing and npm state survive container recreation:
+
+```bash
+docker run -it --rm \
+  -v /nix:/nix:ro \
+  -v flake-env:/env \
+  -v flake-workspace:/workspace \
+  -v flake-agent-state:/state \
+  -e NIX_DIR=$NIX_DIR \
+  flake-docker
+```
+
+Then start the remote agent inside the container:
+
+```bash
+remote-desktop
+```
+
+The launcher runs `@wonderwhy-er/desktop-commander@0.2.50` with the Node/npm toolchain from `/env`, while keeping its HOME and npm cache under `/state`.
+
+## Agent guide
+
+`SKILL.md` documents the sandbox layout and expected agent workflow. A copy is also installed in the image at:
+
+```text
+/etc/flake-docker/SKILL.md
+```
 
 ## Non-interactive commands
 
@@ -110,7 +149,7 @@ The repository `flake.nix` is only the seed used when `/env/flake.nix` does not 
 The image can be used as a persistent development sandbox for an AI agent:
 
 - keep host policy, Docker configuration, and the image outside the agent's control
-- give the agent write access to `/env` and `/workspace`
+- give the agent write access to `/env`, `/workspace`, and optionally `/state`
 - let it evolve its toolchain by editing the flake
 - keep the host's Nix user untrusted
 - avoid exposing the Docker socket inside the sandbox
@@ -135,7 +174,7 @@ export NIX_DIR=$(dirname $(readlink -f $(which nix)))
 - **Declarative state** — toolchain changes remain inspectable and reproducible
 - **Tiny image** — packages come from the host Nix store
 - **No duplication** — shares the host store
-- **Separated state** — toolchain, workspace, and container rootfs have distinct lifecycles
+- **Separated state** — toolchain, workspace, agent state, and container rootfs have distinct lifecycles
 
 ## Limitations
 
