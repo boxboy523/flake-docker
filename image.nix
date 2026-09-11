@@ -12,26 +12,44 @@ let
     finalImageTag = "latest";
   };
 
-  # The SSH control plane must keep working even when /env is broken and
-  # even after the host /nix mount hides the image's own /nix directory.
-  # Build these binaries statically, then copy their bytes into ordinary
-  # rootfs paths rather than exposing their Nix store paths in the image.
+  # Build OpenSSH statically, but stage it as an FHS subtree inside the
+  # derivation. The binaries therefore contain /usr/... runtime paths rather
+  # than /nix/store/... paths. image.nix later copies that subtree into the
+  # Alpine rootfs, so SSH remains independent from the runtime /nix mount.
   controlOpenSSH =
     (pkgs.pkgsStatic.openssh.override {
-      etcDir = "/etc/ssh";
       isNixos = false;
       withLdns = false;
     }).overrideAttrs (old: {
-      configureFlags = (old.configureFlags or [ ]) ++ [
-        "--libexecdir=/usr/lib/ssh"
-        "--with-privsep-path=/var/empty"
-        "--with-privsep-user=sshd"
-      ];
-      # Keep the compiled runtime path outside /nix, but install the helpers
-      # into the derivation so image assembly can copy them into /usr/lib/ssh.
-      installFlags = (old.installFlags or [ ]) ++ [
-        "libexecdir=$out/libexec"
-      ];
+      dontAddPrefix = true;
+
+      configureFlags =
+        builtins.filter
+          (flag:
+            !(pkgs.lib.hasPrefix "--sbindir=" flag)
+            && !(pkgs.lib.hasPrefix "--sysconfdir=" flag)
+            && !(pkgs.lib.hasPrefix "--libexecdir=" flag))
+          (old.configureFlags or [ ])
+        ++ [
+          "--prefix=/usr"
+          "--sbindir=/usr/sbin"
+          "--sysconfdir=/etc/ssh"
+          "--libexecdir=/usr/lib/ssh"
+          "--with-privsep-path=/var/empty"
+          "--with-privsep-user=sshd"
+        ];
+
+      installPhase = ''
+        runHook preInstall
+        make install-nokeys DESTDIR="$out"
+        runHook postInstall
+      '';
+
+      # The upstream nixpkgs post-install/checks assume a normal Nix package
+      # layout such as $out/bin. This derivation deliberately stages an FHS
+      # root instead, so image assembly is the relevant consumer/test.
+      postInstall = "";
+      doInstallCheck = false;
     });
 
   controlSuExec = pkgs.pkgsStatic.su-exec;
@@ -71,8 +89,8 @@ pkgs.dockerTools.buildLayeredImage {
     install -m644 ${src}/SKILL.md etc/flake-docker/SKILL.md
     install -m644 ${src}/bootstrap-flake.nix bootstrap/flake.nix
 
-    install -m755 ${controlOpenSSH}/bin/sshd usr/sbin/sshd
-    cp -a ${controlOpenSSH}/libexec/. usr/lib/ssh/
+    install -m755 ${controlOpenSSH}/usr/sbin/sshd usr/sbin/sshd
+    cp -a ${controlOpenSSH}/usr/lib/ssh/. usr/lib/ssh/
     install -m755 ${controlSuExec}/bin/su-exec sbin/su-exec
 
     cat > etc/nix/nix.conf <<'EOF'
