@@ -8,11 +8,12 @@ Traditional Docker containers bundle all dependencies into the image itself — 
 
 **flake-docker** takes a different approach:
 
-- The Docker image is a thin Alpine shell with no fixed toolchain
+- The Docker image is a thin Alpine shell with a small fixed control plane
 - Packages are served from the host's `/nix/store`
 - The environment is declared in `/env/flake.nix`
 - `/env` can be persistent, so humans or agents can evolve their own toolchain without rebuilding the image
 - `/workspace` is kept separate from the environment definition
+- optional SSH access is provided by the image-level control plane, not by `/env`
 
 ```text
 Host NixOS
@@ -79,6 +80,53 @@ dev cargo test
 
 The environment definition is persistent and declarative rather than hidden in a mutable container image.
 
+## SSH agent access
+
+SSH is an optional transport for external agents. The SSH server is installed in the image so access does not depend on the mutable `/env` toolchain.
+
+Generate a client key and persistent container host key on the host:
+
+```bash
+mkdir -p .agent-ssh
+ssh-keygen -t ed25519 -N '' -f .agent-ssh/client_key
+cp .agent-ssh/client_key.pub .agent-ssh/authorized_keys
+ssh-keygen -t ed25519 -N '' -f .agent-ssh/ssh_host_ed25519_key
+chmod 600 .agent-ssh/client_key .agent-ssh/ssh_host_ed25519_key
+```
+
+Start the sandbox with SSH published only on host loopback:
+
+```bash
+docker run --rm -it \
+  -v /nix:/nix:ro \
+  -v flake-env:/env \
+  -v flake-workspace:/workspace \
+  -v "$PWD/.agent-ssh:/run/agent-ssh:ro" \
+  -e NIX_DIR="$NIX_DIR" \
+  -p 127.0.0.1:2222:2222 \
+  flake-docker start-sshd
+```
+
+Connect from the host:
+
+```bash
+ssh \
+  -i .agent-ssh/client_key \
+  -p 2222 \
+  -o StrictHostKeyChecking=accept-new \
+  pn@127.0.0.1
+```
+
+Remote commands are also supported:
+
+```bash
+ssh -i .agent-ssh/client_key -p 2222 pn@127.0.0.1 'pwd && git status'
+```
+
+SSH sessions start in `/workspace` inside `nix develop /env`. Password login, root login, TCP forwarding, agent forwarding, X11 forwarding, and tunnels are disabled.
+
+Host directories that should be visible to an agent should be explicitly bind-mounted by the human operating Docker. SSH itself does not expose arbitrary host files.
+
 ## Agent guide
 
 `SKILL.md` documents the sandbox layout and expected agent workflow. A copy is also installed in the image at:
@@ -86,14 +134,6 @@ The environment definition is persistent and declarative rather than hidden in a
 ```text
 /etc/flake-docker/SKILL.md
 ```
-
-## Host-side control plane
-
-Remote control, pairing, and authentication should live outside this container. A host-side controller can expose a narrow IPC bridge into the sandbox when remote agent access is needed.
-
-Keep the controller itself restricted and avoid giving it direct Docker socket access. Prefer a dedicated Unix socket or similarly constrained bridge that only targets this sandbox.
-
-Editor integration can follow the same pattern: expose a small read-mostly RPC surface instead of arbitrary host-side evaluation.
 
 ## Non-interactive commands
 
@@ -121,6 +161,7 @@ The repository `flake.nix` is only the seed used when `/env/flake.nix` does not 
         python3
         nodejs
         git
+        openssh
         ripgrep
       ];
     };
@@ -132,19 +173,21 @@ The repository `flake.nix` is only the seed used when `/env/flake.nix` does not 
 
 The image can be used as a persistent development sandbox for an AI agent:
 
-- keep host policy, Docker configuration, remote control, and the image outside the agent's control
-- give the agent write access to `/env` and `/workspace`
+- keep host policy, Docker configuration, SSH keys, and the image outside the agent's control
+- give the agent write access to `/env`, `/workspace`, and only explicitly mounted host paths
 - let it evolve its toolchain by editing the flake
 - keep the host's Nix user untrusted
 - avoid exposing the Docker socket inside the sandbox
+- publish SSH only to loopback unless remote network access is explicitly intended
 - add container-level capability, memory, CPU, and network restrictions as appropriate
-- expose host functionality only through narrow, documented IPC bridges
 
-The security boundary belongs in the container launch policy and bridge policy, not in `flake.nix`.
+The security boundary belongs in the container launch policy and mounted resources, not in `flake.nix`.
 
 ## How it works
 
-The entrypoint locates the Nix binary from the mounted store, initializes `/env/flake.nix` from `/bootstrap/flake.nix` only when necessary, then runs the requested command inside `nix develop /env`.
+The entrypoint locates the Nix binary from the mounted store, initializes `/env/flake.nix` from `/bootstrap/flake.nix` only when necessary, then runs ordinary commands as `pn` inside `nix develop /env`.
+
+`start-sshd` is a special image-level command that starts the fixed OpenSSH server. Authenticated SSH sessions are forced through `/usr/local/bin/ssh-session`, which enters `/workspace` and the current `/env` environment.
 
 `NIX_DIR` can be injected at runtime to skip the store scan on startup:
 
@@ -157,9 +200,9 @@ export NIX_DIR=$(dirname $(readlink -f $(which nix)))
 - **No image rebuilds** — update the persistent flake instead
 - **Self-managed toolchain** — the environment can evolve from inside the sandbox
 - **Declarative state** — toolchain changes remain inspectable and reproducible
-- **Tiny image** — packages come from the host Nix store
+- **Small image** — development packages come from the host Nix store
 - **No duplication** — shares the host store
-- **Separated state** — toolchain, workspace, and container rootfs have distinct lifecycles
+- **Separated state** — toolchain, workspace, SSH identity, and container rootfs have distinct lifecycles
 
 ## Limitations
 

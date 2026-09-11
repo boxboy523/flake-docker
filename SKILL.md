@@ -6,11 +6,12 @@ Use this container as a persistent, declarative development sandbox.
 
 - `/env`: persistent toolchain definition. Edit `/env/flake.nix` and `/env/flake.lock` as needed.
 - `/workspace`: persistent project files and repositories.
-- container rootfs: disposable. Do not rely on changes outside the persistent paths.
+- other paths: available only when explicitly mounted by the container operator.
+- container rootfs: disposable. Do not rely on changes outside persistent or mounted paths.
 
 ## Toolchain workflow
 
-The current shell was created from `/env/flake.nix`. If you change the flake, use `dev` to enter the updated environment or run a command in it:
+SSH and ordinary sessions enter the environment defined by `/env/flake.nix`. If you change the flake, use `dev` to enter the updated environment or run a command in it:
 
 ```sh
 dev
@@ -18,7 +19,7 @@ dev rg --version
 dev cargo test
 ```
 
-Prefer adding required tools to `/env/flake.nix` instead of installing mutable system packages. Keep the environment reproducible with `flake.lock`.
+Prefer adding required development tools to `/env/flake.nix` instead of installing mutable system packages. Keep the environment reproducible with `flake.lock`.
 
 ## Project workflow
 
@@ -28,12 +29,12 @@ Do not expect host files, credentials, Docker sockets, or other host resources t
 
 ## Host integration
 
-Remote control and pairing belong outside this container. A host-side controller may expose a narrow IPC bridge into the sandbox when needed.
+SSH is only the transport into this sandbox. It does not grant Docker or host-shell access.
 
-Use only documented bridge commands or sockets. Do not assume arbitrary host execution, Docker control, or unrestricted editor access is permitted.
+Host directories are visible only when the container operator explicitly bind-mounts them. Treat those mount boundaries and permissions as authoritative.
 
 ## Security boundary
 
-You may modify `/env` and `/workspace`. Treat the image, host configuration, mounts, capabilities, IPC bridges, and container launch policy as outside your control.
+You may modify `/env`, `/workspace`, and any explicitly writable mounts. Treat the image, SSH configuration and keys, host configuration, mounts, capabilities, and container launch policy as outside your control.
 
-If host editor integration is available, use only its documented bridge or socket API. Do not assume arbitrary host execution is permitted.
+Do not attempt to access host resources that were not explicitly mounted or otherwise provided to the sandbox.

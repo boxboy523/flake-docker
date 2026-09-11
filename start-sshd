@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+KEY_DIR=/run/agent-ssh
+AUTHORIZED_KEYS="$KEY_DIR/authorized_keys"
+HOST_KEY="$KEY_DIR/ssh_host_ed25519_key"
+
+if [ ! -r "$AUTHORIZED_KEYS" ]; then
+  echo "missing readable $AUTHORIZED_KEYS" >&2
+  exit 64
+fi
+
+if [ ! -r "$HOST_KEY" ]; then
+  echo "missing readable $HOST_KEY" >&2
+  exit 64
+fi
+
+mkdir -p /run/sshd
+exec /usr/sbin/sshd -D -e -f /etc/ssh/sshd_config
