@@ -64,13 +64,36 @@ docker run -it --rm \
 
 On the first run, `/bootstrap/flake.nix` seeds `/env/flake.nix`. After that, `/env` is left untouched.
 
-This means the container can add or remove packages by editing `/env/flake.nix`, then re-entering the environment with:
+This means the container can add or remove packages by editing `/env/flake.nix`, then enter the updated environment with:
 
 ```bash
-nix develop /env
+dev
+```
+
+Or run one command in the updated environment:
+
+```bash
+dev rg --version
+dev cargo test
 ```
 
 The environment definition is persistent and declarative rather than hidden in a mutable container image.
+
+## Agent guide
+
+`SKILL.md` documents the sandbox layout and expected agent workflow. A copy is also installed in the image at:
+
+```text
+/etc/flake-docker/SKILL.md
+```
+
+## Host-side control plane
+
+Remote control, pairing, and authentication should live outside this container. A host-side controller can expose a narrow IPC bridge into the sandbox when remote agent access is needed.
+
+Keep the controller itself restricted and avoid giving it direct Docker socket access. Prefer a dedicated Unix socket or similarly constrained bridge that only targets this sandbox.
+
+Editor integration can follow the same pattern: expose a small read-mostly RPC surface instead of arbitrary host-side evaluation.
 
 ## Non-interactive commands
 
@@ -109,14 +132,15 @@ The repository `flake.nix` is only the seed used when `/env/flake.nix` does not 
 
 The image can be used as a persistent development sandbox for an AI agent:
 
-- keep host policy, Docker configuration, and the image outside the agent's control
+- keep host policy, Docker configuration, remote control, and the image outside the agent's control
 - give the agent write access to `/env` and `/workspace`
 - let it evolve its toolchain by editing the flake
 - keep the host's Nix user untrusted
 - avoid exposing the Docker socket inside the sandbox
 - add container-level capability, memory, CPU, and network restrictions as appropriate
+- expose host functionality only through narrow, documented IPC bridges
 
-The security boundary belongs in the container launch policy, not in `flake.nix`.
+The security boundary belongs in the container launch policy and bridge policy, not in `flake.nix`.
 
 ## How it works
 
