@@ -25,6 +25,8 @@ if [ "$#" -eq 0 ]; then
 fi
 
 if [ "$1" = "start-sshd" ]; then
+  mkdir -p /run/flake-docker
+  printf '%s\n' "$NIX_DIR" > /run/flake-docker/nix-dir
   exec /usr/local/bin/start-sshd
 fi
 
