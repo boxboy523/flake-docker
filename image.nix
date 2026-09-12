@@ -91,6 +91,7 @@ pkgs.dockerTools.buildLayeredImage {
     install -m755 ${src}/dev usr/local/bin/dev
     install -m755 ${src}/ssh-session usr/local/bin/ssh-session
     install -m755 ${src}/start-sshd usr/local/bin/start-sshd
+    install -m755 ${src}/hermes-init.sh usr/local/bin/hermes-init
     install -m644 ${src}/sshd_config etc/ssh/sshd_config
     install -m644 ${src}/SKILL.md etc/flake-docker/SKILL.md
     install -m644 ${src}/bootstrap-flake.nix bootstrap/flake.nix
