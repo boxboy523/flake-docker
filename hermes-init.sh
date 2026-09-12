@@ -1,3 +1,4 @@
+#!/bin/bash
 # flake-docker shell initialization for Hermes' Docker terminal backend.
 # Hermes sources this file while building its persistent bash environment snapshot.
 
