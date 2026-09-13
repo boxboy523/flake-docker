@@ -56,6 +56,7 @@ let
       doInstallCheck = false;
     });
 
+  controlBash = pkgs.pkgsStatic.bash;
   controlSuExec = pkgs.pkgsStatic.su-exec;
 in
 pkgs.dockerTools.buildLayeredImage {
@@ -70,6 +71,7 @@ pkgs.dockerTools.buildLayeredImage {
 
   extraCommands = ''
     mkdir -p \
+      bin \
       bootstrap \
       env \
       workspace \
@@ -89,10 +91,12 @@ pkgs.dockerTools.buildLayeredImage {
     install -m755 ${src}/dev usr/local/bin/dev
     install -m755 ${src}/ssh-session usr/local/bin/ssh-session
     install -m755 ${src}/start-sshd usr/local/bin/start-sshd
+    install -m755 ${src}/hermes-init.sh usr/local/bin/hermes-init
     install -m644 ${src}/sshd_config etc/ssh/sshd_config
     install -m644 ${src}/SKILL.md etc/flake-docker/SKILL.md
     install -m644 ${src}/bootstrap-flake.nix bootstrap/flake.nix
 
+    install -m755 ${controlBash}/bin/bash bin/bash
     install -m755 ${controlOpenSSH}/usr/sbin/sshd usr/sbin/sshd
     cp -a ${controlOpenSSH}/usr/lib/ssh/. usr/lib/ssh/
     install -m755 ${controlSuExec}/bin/su-exec sbin/su-exec
